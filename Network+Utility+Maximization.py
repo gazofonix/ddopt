@@ -3,7 +3,17 @@
 
 # # Simulator for NUM problems
 
-# In[ ]:
+# In[172]:
+
+
+max_iter = 10000
+source = 1
+link = 7
+max_path = 15
+barrier = 1
+
+
+# In[156]:
 
 
 import numpy as np
@@ -14,12 +24,19 @@ import pdb
 # In[ ]:
 
 
+# Number of paths per OD pair
+path = max_path * np.ones(source, dtype='int32')
+
+
+# In[157]:
+
+
 get_ipython().magic('matplotlib notebook')
 
 
 # Function definition
 
-# In[ ]:
+# In[158]:
 
 
 def generate_coeff(source):
@@ -28,7 +45,7 @@ def generate_coeff(source):
     return np.random.rand(source)
 
 
-# In[ ]:
+# In[159]:
 
 
 def generate_link(link):
@@ -38,7 +55,7 @@ def generate_link(link):
     return scale * np.random.rand(link)
 
 
-# In[ ]:
+# In[160]:
 
 
 def generate_path(source, path, link):
@@ -62,7 +79,7 @@ def generate_path(source, path, link):
 #     x^{(0)}_{s,p}=\min_{l\in L}\left\{ \frac{0,9\cdot c_l}{\sum_{s,p}\mathbf{1}_{s,p\ni l}}\right\}, \qquad \forall s\in S, p\in P_s
 # \end{equation}
 
-# In[ ]:
+# In[161]:
 
 
 def initial_solution(x, cl):
@@ -76,7 +93,7 @@ def initial_solution(x, cl):
 #     \sum_{s\in S}a_s\cdot\log\left(\sum_{p\in P_s}x_{s,p}\right), \qquad a_s\in [0, 1].
 # \end{equation}
 
-# In[ ]:
+# In[162]:
 
 
 def compute_utility(x, source, coeff):
@@ -85,16 +102,16 @@ def compute_utility(x, source, coeff):
     return sum(coeff * np.log(np.sum(np.max(x, axis=2), axis=1)))
 
 
-# In[ ]:
+# In[163]:
 
 
 def compute_obj(x, source, coeff, b, cl):
     """ Compute the utility minus the barrier penalty """
 
-    return compute_utility(x, source, coeff) + sum(b * np.log(cl - np.sum(np.sum(x, axis=1), axis=0)))
+    return compute_utility(x, source, coeff) - sum(b * np.log(cl - np.sum(np.sum(x, axis=1), axis=0)))
 
 
-# In[ ]:
+# In[164]:
 
 
 def backtracking_linesearch(old_x, source, link, path, coeff, step_size, barrier, cl):
@@ -122,7 +139,7 @@ def backtracking_linesearch(old_x, source, link, path, coeff, step_size, barrier
 #     x_{s,p}^{(k+1)} = x_{s,p}^{(k)}\cdot \exp \left\{\eta^{(k)}\cdot \left[U_s'\left(x^{(k)}_{s,p}\right) - \sum_{l:l\in s,p}\frac{\mu^{(k)}}{\sum x^{(k)}_{s,p} - c_l}\right]\right\}
 # \end{equation}
 
-# In[ ]:
+# In[165]:
 
 
 def egd_step(old_x, source, link, path, step_size, barrier, cl):
@@ -131,18 +148,17 @@ def egd_step(old_x, source, link, path, step_size, barrier, cl):
     price = compute_price(source, path, cl, old_x)
 
     # Gradient step
-    #pdb.set_trace()
     aux = np.max(old_x, axis=2) * np.exp(step_size * (1 / np.max(old_x, axis=2) - price))
     x = np.tile(aux, (link, 1, 1)).transpose(1, 2, 0) * (old_x > 0).astype(int)
     while any(np.sum(np.sum(x, axis=1), axis=0) > cl):
-        step_size /= 2
+        step_size *= 0.9
         aux = np.max(old_x, axis=2) * np.exp(step_size * (1 / np.max(old_x, axis=2) - price))
         x = np.tile(aux, (link, 1, 1)).transpose(1, 2, 0) * (old_x > 0).astype(int)
         
     return x, step_size
 
 
-# In[ ]:
+# In[166]:
 
 
 def gd_step(old_x, source, link, path, step_size, barrier, cl):
@@ -154,14 +170,14 @@ def gd_step(old_x, source, link, path, step_size, barrier, cl):
     aux = np.max(old_x, axis=2) + step_size * (1 / np.max(old_x, axis=2) - price)
     x = np.tile(aux, (link, 1, 1)).transpose(1, 2, 0) * (old_x > 0).astype(int)
     while any(np.sum(np.sum(x, axis=1), axis=0) > cl) or (np.sum(np.sum(aux < 0)) > 0):
-        step_size /= 2
+        step_size *= 0.9
         aux = np.max(old_x, axis=2) + step_size * (1 / np.max(old_x, axis=2) - price)
         x = np.tile(aux, (link, 1, 1)).transpose(1, 2, 0) * (old_x > 0).astype(int)
         
     return x, step_size 
 
 
-# In[ ]:
+# In[167]:
 
 
 def compute_price(source, path, cl, x):
@@ -176,73 +192,102 @@ def compute_price(source, path, cl, x):
     return price
 
 
-# In[ ]:
+# In[168]:
 
 
 def check_overflow(x, step_size):
     """ Bound the exponent of the gradient step with the value set by <overflow_exponent> """
     
-    overflow_exponent = 50
+    overflow_exponent = 15
     if step_size * (1 / x) > overflow_exponent:
         step_size = np.min(overflow_exponent / (1 / x))
 
     return step_size
 
 
-# In[ ]:
+# In[169]:
 
 
 def exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     """ Compute the utility of the EGD algorithm """
-
+    
+    step_correction = 0.9999 # decrease step size
+    
     # Initial feasible solution EGD
     x = initial_solution(x0, cl)
     step_size = check_overflow(np.min(np.max(x, axis=2)), 10)
     utility = np.zeros((max_iter + 1))
-
     utility[0] = compute_utility(x, source, coeff)
+    
+    # Output variables
+    obj = np.zeros((max_iter + 1))
+    obj[0] = compute_obj(x, source, coeff, step_size, cl)
+    step = np.zeros((max_iter + 1))
+    step[0] = step_size
+
     for i in range(max_iter):
-        x, step_size = egd_step(x, source, link, path, step_size, barrier, cl)
+        step_size *= step_correction
+        x, step_size = egd_step(x, source, link, path, step_size, step_size, cl)
+            
+        # Output
         utility[i + 1] = compute_utility(x, source, coeff)
+        obj[i + 1] = compute_obj(x, source, coeff, step_size, cl)
+        step[i + 1] = step_size
+        
         if i % np.round(max_iter / 10) == 0:
             print(i)
 
-    return utility
+    return utility, obj, step
 
 
-# In[ ]:
+# In[170]:
 
 
 def gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     """ Compute the utility of the GD algorithm """
 
+    step_correction = 0.9999 # decrease step size
+    
     # Initial feasible solution GD
     x = initial_solution(x0, cl)
     step_size = 100
     utility = np.zeros((max_iter + 1))
-
     utility[0] = compute_utility(x, source, coeff)
+    
+    # Output variables
+    obj = np.zeros((max_iter + 1))
+    obj[0] = compute_obj(x, source, coeff, step_size, cl)
+    step = np.zeros((max_iter + 1))
+    step[0] = 0
+
+
     for i in range(max_iter):
+        step_size *= step_correction
         x, step_size = gd_step(x, source, link, path, step_size, barrier, cl)
+            
+        # Output
         utility[i + 1] = compute_utility(x, source, coeff)
+        obj[i + 1] = compute_obj(x, source, coeff, step_size, cl)
+        step[i + 1] = step_size
+        
         if i % np.round(max_iter / 10) == 0:
             print(i)
 
-    return utility
+    return utility, obj, step
 
 
-# In[ ]:
+# In[171]:
 
 
-def plot_utility(utility_egd, utility_gd, max_iter):
+def generate_plot(utility_egd, utility_gd, max_iter):
     """ Plot utility value per iteration """
     
     fig, ax = plt.subplots()
-    ax.plot(range(max_iter + 1), utility_egd, 'k', label='EGD')
-    ax.plot(range(max_iter + 1), utility_gd, 'g:', label='GD')
+    ax.plot(range(max_iter), utility_egd[1:], 'k', label='EGD')
+    ax.plot(range(max_iter), utility_gd[1:], 'g:', label='GD')
     
     # Add the legent
-    legend = ax.legend(loc='upper right', shadow=True)
+    legend = ax.legend(loc='lower right', shadow=True)
 
     # The frame is matplotlib.patches.Rectangle instance surrounding the legend
     frame = legend.get_frame()
@@ -260,26 +305,7 @@ def plot_utility(utility_egd, utility_gd, max_iter):
 
 # Variable initialization
 
-# In[ ]:
-
-
-# Max number of iterations
-max_iter = 15000
-
-# Number of OD pairs
-source = 10
-
-# Number of paths per OD pair
-path = 10 * np.ones(source, dtype='int32')
-
-# Number of links
-link = 5
-
-# Fixed barrier function
-barrier = 100
-
-
-# In[ ]:
+# In[173]:
 
 
 # Define utility
@@ -298,9 +324,11 @@ x0 = generate_path(source, path, link)
 
 
 # Compute utility
-get_ipython().magic('time utility_egd = exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
-get_ipython().magic('time utility_gd = gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
+get_ipython().magic('time utility_egd, obj_egd, step_egd = exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
+get_ipython().magic('time utility_gd, obj_gd, step_gd = gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
 
 # Plot
-plot_utility(utility_egd, utility_gd, max_iter)
+generate_plot(utility_egd, utility_gd, max_iter)
+generate_plot(obj_egd, obj_gd, max_iter)
+generate_plot(step_egd, step_gd, max_iter)
 
