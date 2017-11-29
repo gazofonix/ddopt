@@ -3,40 +3,32 @@
 
 # # Simulator for NUM problems
 
-# In[172]:
+# In[120]:
 
 
-max_iter = 10000
-source = 1
-link = 7
-max_path = 15
+max_iter = 1000
+source = 10
+link = 10
+max_path = 10
 barrier = 1
 
 
-# In[156]:
+# In[121]:
 
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pdb
+import pickle
 
 
-# In[ ]:
-
-
-# Number of paths per OD pair
-path = max_path * np.ones(source, dtype='int32')
-
-
-# In[157]:
+# In[122]:
 
 
 get_ipython().magic('matplotlib notebook')
 
 
-# Function definition
-
-# In[158]:
+# In[123]:
 
 
 def generate_coeff(source):
@@ -45,7 +37,7 @@ def generate_coeff(source):
     return np.random.rand(source)
 
 
-# In[159]:
+# In[124]:
 
 
 def generate_link(link):
@@ -55,7 +47,7 @@ def generate_link(link):
     return scale * np.random.rand(link)
 
 
-# In[160]:
+# In[125]:
 
 
 def generate_path(source, path, link):
@@ -74,12 +66,34 @@ def generate_path(source, path, link):
     return x
 
 
+# In[126]:
+
+
+def generate_graph():
+    
+    # Define utility
+    coeff = generate_coeff(source)
+
+    # Generate link capacity
+    cl = generate_link(link)
+
+    # Generate paths
+    x0 = generate_path(source, path, link)
+    
+    data = {"coeff": coeff, "link_capacity": cl, "path": x0}
+    
+    # Store graph information in an external file 'graph.p'
+    pickle.dump(data, open("graph.p", "wb"))
+    
+    return data
+
+
 # We set the initial solution as
 # \begin{equation}
 #     x^{(0)}_{s,p}=\min_{l\in L}\left\{ \frac{0,9\cdot c_l}{\sum_{s,p}\mathbf{1}_{s,p\ni l}}\right\}, \qquad \forall s\in S, p\in P_s
 # \end{equation}
 
-# In[161]:
+# In[127]:
 
 
 def initial_solution(x, cl):
@@ -93,7 +107,7 @@ def initial_solution(x, cl):
 #     \sum_{s\in S}a_s\cdot\log\left(\sum_{p\in P_s}x_{s,p}\right), \qquad a_s\in [0, 1].
 # \end{equation}
 
-# In[162]:
+# In[128]:
 
 
 def compute_utility(x, source, coeff):
@@ -102,7 +116,7 @@ def compute_utility(x, source, coeff):
     return sum(coeff * np.log(np.sum(np.max(x, axis=2), axis=1)))
 
 
-# In[163]:
+# In[129]:
 
 
 def compute_obj(x, source, coeff, b, cl):
@@ -111,7 +125,7 @@ def compute_obj(x, source, coeff, b, cl):
     return compute_utility(x, source, coeff) - sum(b * np.log(cl - np.sum(np.sum(x, axis=1), axis=0)))
 
 
-# In[164]:
+# In[130]:
 
 
 def backtracking_linesearch(old_x, source, link, path, coeff, step_size, barrier, cl):
@@ -129,6 +143,14 @@ def backtracking_linesearch(old_x, source, link, path, coeff, step_size, barrier
     return t
 
 
+# In[131]:
+
+
+def load_graph(a):
+
+    return a["coeff"], a["link_capacity"], a["path"]
+
+
 # We use the logarithmic barrier function
 # \begin{equation}
 #     \quad B_l({y}) = \begin{cases} -\log(c_l - y), & \mbox{if } {y}< c_l, \\ \infty, & \mbox{if } {y}\geq c_l. \end{cases}
@@ -139,7 +161,7 @@ def backtracking_linesearch(old_x, source, link, path, coeff, step_size, barrier
 #     x_{s,p}^{(k+1)} = x_{s,p}^{(k)}\cdot \exp \left\{\eta^{(k)}\cdot \left[U_s'\left(x^{(k)}_{s,p}\right) - \sum_{l:l\in s,p}\frac{\mu^{(k)}}{\sum x^{(k)}_{s,p} - c_l}\right]\right\}
 # \end{equation}
 
-# In[165]:
+# In[132]:
 
 
 def egd_step(old_x, source, link, path, step_size, barrier, cl):
@@ -158,7 +180,7 @@ def egd_step(old_x, source, link, path, step_size, barrier, cl):
     return x, step_size
 
 
-# In[166]:
+# In[133]:
 
 
 def gd_step(old_x, source, link, path, step_size, barrier, cl):
@@ -177,7 +199,7 @@ def gd_step(old_x, source, link, path, step_size, barrier, cl):
     return x, step_size 
 
 
-# In[167]:
+# In[134]:
 
 
 def compute_price(source, path, cl, x):
@@ -192,7 +214,7 @@ def compute_price(source, path, cl, x):
     return price
 
 
-# In[168]:
+# In[135]:
 
 
 def check_overflow(x, step_size):
@@ -205,7 +227,7 @@ def check_overflow(x, step_size):
     return step_size
 
 
-# In[169]:
+# In[136]:
 
 
 def exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
@@ -240,7 +262,7 @@ def exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, 
     return utility, obj, step
 
 
-# In[170]:
+# In[137]:
 
 
 def gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
@@ -276,7 +298,7 @@ def gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     return utility, obj, step
 
 
-# In[171]:
+# In[138]:
 
 
 def generate_plot(utility_egd, utility_gd, max_iter):
@@ -303,30 +325,28 @@ def generate_plot(utility_egd, utility_gd, max_iter):
     plt.show()
 
 
-# Variable initialization
-
-# In[173]:
-
-
-# Define utility
-coeff = np.random.rand(source)
-
-# Generate link capacity
-cl = generate_link(link)
-
-# Generate paths
-x0 = generate_path(source, path, link)
-
-
 # Body of the simulator
 
-# In[ ]:
+# In[139]:
 
+
+# Number of paths per OD pair
+path = max_path * np.ones(source, dtype='int32')
+
+# Upload graph information
+try:
+    b = pickle.load(open("graph.p", "rb"))  
+    coeff, cl, x0 = load_graph(b)
+except:
+    print("Generating a new network graph...")
+    data = generate_graph()
+    coeff, cl, x0 = load_graph(data)
+    print("Network graph generated!")
 
 # Compute utility
 get_ipython().magic('time utility_egd, obj_egd, step_egd = exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
 get_ipython().magic('time utility_gd, obj_gd, step_gd = gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier)')
-
+       
 # Plot
 generate_plot(utility_egd, utility_gd, max_iter)
 generate_plot(obj_egd, obj_gd, max_iter)
