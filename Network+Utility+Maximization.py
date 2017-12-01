@@ -6,10 +6,10 @@
 # In[120]:
 
 
-max_iter = 1000
+max_iter = 10000
 source = 10
-link = 10
-max_path = 10
+link = 50
+max_path = 5
 barrier = 1
 
 
@@ -220,7 +220,7 @@ def compute_price(source, path, cl, x):
 def check_overflow(x, step_size):
     """ Bound the exponent of the gradient step with the value set by <overflow_exponent> """
     
-    overflow_exponent = 15
+    overflow_exponent = 10
     if step_size * (1 / x) > overflow_exponent:
         step_size = np.min(overflow_exponent / (1 / x))
 
@@ -233,7 +233,7 @@ def check_overflow(x, step_size):
 def exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     """ Compute the utility of the EGD algorithm """
     
-    step_correction = 0.9999 # decrease step size
+    step_correction = 1 # decrease step size
     
     # Initial feasible solution EGD
     x = initial_solution(x0, cl)
@@ -268,11 +268,11 @@ def exponentiated_gradient_descent(x0, cl, max_iter, source, link, path, coeff, 
 def gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     """ Compute the utility of the GD algorithm """
 
-    step_correction = 0.9999 # decrease step size
+    step_correction = 1 # decrease step size
     
     # Initial feasible solution GD
     x = initial_solution(x0, cl)
-    step_size = 100
+    step_size = 1
     utility = np.zeros((max_iter + 1))
     utility[0] = compute_utility(x, source, coeff)
     
@@ -281,7 +281,6 @@ def gradient_descent(x0, cl, max_iter, source, link, path, coeff, barrier):
     obj[0] = compute_obj(x, source, coeff, step_size, cl)
     step = np.zeros((max_iter + 1))
     step[0] = 0
-
 
     for i in range(max_iter):
         step_size *= step_correction
